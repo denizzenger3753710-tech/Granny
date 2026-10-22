@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Korku Evi - Granny Style</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; user-select: none; }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 8px; height: 8px; background: rgba(255,255,255,0.7); border-radius: 50%; pointer-events: none; z-index: 10;
+        }
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 20;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 6px 100%;
+        }
+        .vignette {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 15;
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.9), inset 0 0 180px rgba(0,0,0,0.8);
+        }
+        .blood-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 18;
+            box-shadow: inset 0 0 120px rgba(180, 0, 0, 0); transition: box-shadow 0.5s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div id="blood" class="blood-overlay"></div>
+    <div id="crosshair"></div>
+
+    <!-- UI / HUD -->
+    <div id="hud" class="absolute top-4 left-4 z-30 text-white text-lg font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] space-y-2 pointer-events-none hidden">
+        <div id="objective" class="text-red-400 bg-black/60 p-2 rounded border border-red-900/50">Hedef: Anahtarı bul ve çıkış kapısını aç!</div>
+        <div id="inventory" class="text-yellow-300">Envanter: Boş</div>
+        <div class="w-48 bg-gray-800 rounded-full h-3 border border-gray-700 overflow-hidden">
+            <div id="noise-bar" class="bg-red-600 h-full w-0 transition-all duration-100"></div>
+        </div>
+        <div class="text-xs text-gray-400">Ses Seviyesi (Koşarken artar!)</div>
+    </div>
+
+    <!-- GAME OVER / WIN SCREENS -->
+    <div id="game-over" class="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center text-center hidden">
+        <h1 class="text-6xl font-extrabold text-red-600 tracking-widest mb-4 animate-pulse">YAKALANDIN!</h1>
+        <p class="text-gray-400 text-xl mb-6">Büyükanne seni alt etti...</p>
+        <button onclick="location.reload()" class="px-8 py-4 bg-red-800 hover:bg-red-700 text-white font-bold text-lg rounded shadow-lg transition transform hover:scale-105">TEKRAR DENE</button>
+    </div>
+
+    <div id="win-screen" class="absolute inset-0 bg-zinc-950/95 z-50 flex flex-col items-center justify-center text-center hidden">
+        <h1 class="text-6xl font-extrabold text-green-500 tracking-widest mb-4">TEBRİKLER!</h1>
+        <p class="text-gray-300 text-xl mb-6">Korkunç evden başarıyla kaçtın!</p>
+        <button onclick="location.reload()" class="px-8 py-4 bg-green-700 hover:bg-green-600 text-white font-bold text-lg rounded shadow-lg transition transform hover:scale-105">YENİDEN OYNA</button>
+    </div>
+
+    <!-- START SCREEN -->
+    <div id="start-screen" class="absolute inset-0 bg-neutral-950 z-50 flex flex-col items-center justify-center text-center p-6 border-8 border-red-950">
+        <h1 class="text-6xl font-black text-red-700 tracking-wider mb-2 drop-shadow-[0_5px_15px_rgba(255,0,0,0.5)]">BÜYÜKANNE'NİN EVİ</h1>
+        <p class="text-gray-400 max-w-lg mb-8 text-sm leading-relaxed">
+            Bu karanlık evde kilitli kaldın. Anahtarı bulup çıkış kapısını açmalısın.<br>
+            Büyükanne çıkardığın sesleri duyabilir. Hızlı koşarsan dikkatini çekersin!<br><br>
+            <strong class="text-white">Kontroller:</strong><br>
+            WASD: Hareket | SHIFT: Koş | F: El Feneri | E: Etkileşim / Al | Mouse: Etrafa Bak
+        </p>
+        <button id="start-btn" class="px-10 py-5 bg-red-900 hover:bg-red-800 text-white font-bold text-xl rounded shadow-2xl transition transform hover:scale-105 border border-red-600">OYUNA BAŞLA</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer, clock;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isRunning = false;
+        let prevTime = performance.now();
+        let velocity = new THREE.Vector3();
+        let direction = new THREE.Vector3();
+        
+        let flashlight, hasKey = false;
+        let granny, grannyMesh, grannyState = 'patrol'; // patrol, chase, attack
+        let grannyPathIndex = 0;
+        let grannyWaypoints = [
+            new THREE.Vector3(0, 0, -15),
+            new THREE.Vector3(-15, 0, -15),
+            new THREE.Vector3(-15, 0, 15),
+            new THREE.Vector3(15, 0, 15),
+            new THREE.Vector3(15, 0, -15)
+        ];
+
+        let keyObject, doorObject;
+        let gameStarted = false, isGameOver = false, isGameWon = false;
+        let noiseLevel = 0;
+
+        // Sesler için basit synth ses üreteci (Web Audio API)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playCreepySound(freq = 150, type = 'sawtooth', duration = 0.5, vol = 0.1) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + duration);
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e){}
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            document.body.requestPointerLock();
+            gameStarted = true;
+            playCreepySound(100, 'sine', 1.5, 0.3);
+        });
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.FogExp2(0x050505, 0.08);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 20);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            // Ortam Işığı (Çok Loş)
+            const ambientLight = new THREE.AmbientLight(0x111122, 0.4);
+            scene.add(ambientLight);
+
+            // El Feneri
+            flashlight = new THREE.SpotLight(0xffffee, 2.5, 35, Math.PI / 6, 0.5, 1);
+            flashlight.position.set(0, 0, 0);
+            flashlight.castShadow = true;
+            camera.add(flashlight);
+            flashlight.target.position.set(0, 0, -1);
+            camera.add(flashlight.target);
+            scene.add(camera);
+
+            buildHouse();
+            spawnItems();
+            spawnGranny();
+
+            // Kontroller
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // Evi İnşa Et (Duvarlar, Odalar, Zemin, Tavan)
+        function buildHouse() {
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x221a15, roughness: 0.9 });
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x3d332a, roughness: 0.8 });
+            const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+            // Zemin
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Tavan
+            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), ceilingMat);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 4;
+            scene.add(ceiling);
+
+            // Dış Duvarlar (Kare Ev 50x50)
+            createWall(0, 2, -25, 50, 4, 1, wallMat);
+            createWall(0, 2, 25, 50, 4, 1, wallMat);
+            createWall(-25, 2, 0, 1, 4, 50, wallMat);
+            createWall(25, 2, 0, 1, 4, 50, wallMat);
+
+            // İç Bölmeler ve Koridorlar (Labirent Yapısı)
+            createWall(0, 2, 0, 1, 4, 25, wallMat); // Orta duvar
+            createWall(-12, 2, -10, 25, 4, 1, wallMat);
+            createWall(10, 2, 10, 25, 4, 1, wallMat);
+
+            // Çıkış Kapısı
+            const doorGeo = new THREE.BoxGeometry(3, 3.5, 0.4);
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0x4a2e18, roughness: 0.5 });
+            doorObject = new THREE.Mesh(doorGeo, doorMat);
+            doorObject.position.set(0, 1.75, 24.8);
+            doorObject.castShadow = true;
+            scene.add(doorObject);
+        }
+
+        function createWall(x, y, z, w, h, d, mat) {
+            const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            wall.position.set(x, y, z);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+        }
+
+        // Anahtar ve Eşyalar
+        function spawnItems() {
+            // Paslı Anahtar
+            const keyGeo = new THREE.BoxGeometry(0.6, 0.2, 0.2);
+            const keyMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.2 });
+            keyObject = new THREE.Mesh(keyGeo, keyMat);
+            // Rastgele uzak bir odaya koyalım (-20, 0.2, -20)
+            keyObject.position.set(-20, 0.2, -20);
+            keyObject.castShadow = true;
+            scene.add(keyObject);
+        }
+
+        // Büyükanne Modelini Oluştur
+        function spawnGranny() {
+            const grannyGroup = new THREE.Group();
+
+            // Gövde (Elbise)
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x5c1d1d, roughness: 0.9 });
+            const body = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.2, 8), bodyMat);
+            body.position.y = 1.1;
+            body.castShadow = true;
+            grannyGroup.add(body);
+
+            // Kafa
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xe0c2b3, roughness: 0.6 });
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), headMat);
+            head.position.y = 2.4;
+            head.castShadow = true;
+            grannyGroup.add(head);
+
+            // Korkunç Parlayan Kırmızı Gözler
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const eyeGeo = new THREE.SphereGeometry(0.06, 8, 8);
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(0.12, 2.45, 0.35);
+            grannyGroup.add(leftEye);
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(-0.12, 2.45, 0.35);
+            grannyGroup.add(rightEye);
+
+            grannyMesh = grannyGroup;
+            grannyMesh.position.set(0, 0, -15);
+            scene.add(grannyMesh);
+        }
+
+        // Fare ile Kamera Kontrolü
+        let euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        const PI_2 = Math.PI / 2;
+
+        function onMouseMove(event) {
+            if (!gameStarted || isGameOver || isGameWon || document.pointerLockElement !== document.body) return;
+
+            const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+            const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+            euler.setFromQuaternion(camera.quaternion);
+            euler.y -= movementX * 0.002;
+            euler.x -= movementY * 0.002;
+            euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x));
+            camera.quaternion.setFromEuler(euler);
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'ShiftLeft': case 'ShiftRight': isRunning = true; break;
+                case 'KeyF':
+                    if (flashlight) flashlight.visible = !flashlight.visible;
+                    playCreepySound(300, 'sine', 0.1, 0.1);
+                    break;
+                case 'KeyE':
+                    interact();
+                    break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': case 'ShiftRight': isRunning = false; break;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Etkileşim (E Tuşu)
+        function interact() {
+            // Anahtar alma mesafesi
+            if (!hasKey && keyObject && camera.position.distanceTo(keyObject.position) < 3.5) {
+                hasKey = true;
+                scene.remove(keyObject);
+                document.getElementById('inventory').innerText = 'Envanter: Paslı Anahtar 🔑';
+                document.getElementById('objective').innerText = 'Hedef: Çıkış kapısına git ve aç!';
+                playCreepySound(600, 'triangle', 0.3, 0.2);
+            }
+            // Çıkış kapısı etkileşimi
+            else if (camera.position.distanceTo(doorObject.position) < 4.0) {
+                if (hasKey) {
+                    isGameWon = true;
+                    document.getElementById('win-screen').style.display = 'flex';
+                    document.exitPointerLock();
+                } else {
+                    playCreepySound(120, 'sawtooth', 0.4, 0.3);
+                    document.getElementById('objective').innerText = 'Kilitli! Önce anahtarı bulmalısın!';
+                    setTimeout(() => {
+                        if (!hasKey) document.getElementById('objective').innerText = 'Hedef: Anahtarı bul ve çıkış kapısını aç!';
+                    }, 3000);
+                }
+            }
+        }
+
+        // Ana Oyun Döngüsü
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            if (gameStarted && !isGameOver && !isGameWon) {
+                // --- OYUNCU HAREKETLERİ & ÇARPIŞMA ---
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                const speed = isRunning ? 9.0 : 4.5;
+                if (moveForward || moveBackward) velocity.z -= direction.z * speed * 10.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * speed * 10.0 * delta;
+
+                camera.translateX(-velocity.x * delta);
+                camera.translateZ(-velocity.z * delta);
+
+                // Duvar Sınırları (Çarpışma Basit Sınırlandırma)
+                camera.position.x = Math.max(-24, Math.min(24, camera.position.x));
+                camera.position.z = Math.max(-24, Math.min(24, camera.position.z));
+                camera.position.y = 1.6; // Sabit göz yüksekliği
+
+                // Ses Seviyesi Hesaplama (Koşuyorsa veya yürüyorsa yapay zeka duyar)
+                let isMoving = moveForward || moveBackward || moveLeft || moveRight;
+                if (isMoving) {
+                    noiseLevel = isRunning ? 100 : 30;
+                } else {
+                    noiseLevel = 0;
+                }
+                document.getElementById('noise-bar').style.width = noiseLevel + '%';
+
+                // --- BÜYÜKANNE (GRANNY) YAPAY ZEKA ---
+                const distToGranny = grannyMesh.position.distanceTo(camera.position);
+
+                // Ses çok yüksekse (koşma) veya çok yakınsa büyükanne direkt takip eder
+                if (noiseLevel > 50 || distToGranny < 8) {
+                    grannyState = 'chase';
+                } else if (distToGranny > 15 && grannyState === 'chase') {
+                    grannyState = 'patrol';
+                }
+
+                if (grannyState === 'chase') {
+                    // Oyuncuya doğru koş
+                    grannyMesh.lookAt(camera.position.x, grannyMesh.position.y, camera.position.z);
+                    grannyMesh.translateZ(3.8 * delta); // Hızlı takip hızı
+
+                    // Kalp atışı / korku efekti
+                    if (Math.random() < 0.05) playCreepySound(80, 'sawtooth', 0.2, 0.15);
+                    document.getElementById('blood').style.boxShadow = 'inset 0 0 ' + Math.max(20, (12 - distToGranny) * 15) + 'px rgba(180, 0, 0, 0.5)';
+                } else {
+                    // Waypoint'ler arasında devriye gez
+                    let targetWaypoint = grannyWaypoints[grannyPathIndex];
+                    grannyMesh.lookAt(targetWaypoint.x, grannyMesh.position.y, targetWaypoint.z);
+                    grannyMesh.translateZ(2.0 * delta);
+
+                    if (grannyMesh.position.distanceTo(targetWaypoint) < 1.5) {
+                        grannyPathIndex = (grannyPathIndex + 1) % grannyWaypoints.length;
+                    }
+                    document.getElementById('blood').style.boxShadow = 'inset 0 0 0px rgba(180, 0, 0, 0)';
+                }
+
+                // Yakalanma Kontrolü
+                if (distToGranny < 1.5) {
+                    isGameOver = true;
+                    document.getElementById('game-over').style.display = 'flex';
+                    document.exitPointerLock();
+                    playCreepySound(50, 'sawtooth', 1.0, 0.5);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
