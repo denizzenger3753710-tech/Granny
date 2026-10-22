@@ -1,28 +1,108 @@
-Harika! Kodunu baştan sona inceledim ve grafik kalitesini, yapay zekayı, mekanikleri ve atmosferi çok daha profesyonel bir seviyeye taşıyan kapsamlı bir güncelleme hazırladım.
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Korku Evi - Granny Style v2.0</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; user-select: none; }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 6px; height: 6px; background: rgba(255,255,255,0.8); border-radius: 50%; pointer-events: none; z-index: 10;
+            box-shadow: 0 0 4px rgba(0,0,0,0.8); transition: transform 0.1s;
+        }
+        #crosshair.interact {
+            transform: translate(-50%, -50%) scale(2.2);
+            background: #eab308;
+        }
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 20;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 6px 100%;
+        }
+        .vignette {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 15;
+            box-shadow: inset 0 0 120px rgba(0,0,0,0.95), inset 0 0 200px rgba(0,0,0,0.85);
+        }
+        .blood-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 18;
+            box-shadow: inset 0 0 150px rgba(180, 0, 0, 0); transition: box-shadow 0.2s ease;
+        }
+        #jumpscare-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100;
+            background: #110000; display: none; align-items: center; justify-content: center;
+        }
+        .jumpscare-face {
+            width: 100vw; height: 100vh; background: radial-gradient(circle, #800000 0%, #000 80%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            animation: shake 0.05s infinite alternate;
+        }
+        @keyframes shake {
+            0% { transform: translate(10px, 10px) scale(1.05) rotate(1deg); }
+            100% { transform: translate(-10px, -10px) scale(0.95) rotate(-1deg); }
+        }
+    </style>
+</head>
+<body>
 
-İşte yenilenen **3D Korku Evi - Granny Style** sürümündeki başlıca iyileştirmeler:
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div id="blood" class="blood-overlay"></div>
+    <div id="crosshair"></div>
 
-### 🌟 Yeni Eklenen Özellikler & Güncellemeler
+    <!-- PROMPT ACTION TIP -->
+    <div id="interact-tip" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-30 bg-black/80 border border-yellow-600/60 text-yellow-400 px-4 py-2 rounded-lg text-sm font-bold tracking-wide hidden pointer-events-none shadow-lg">
+        [E] ETKİLEŞİM
+    </div>
 
-1. **Görsel & Atmosfer Geliştirmeleri:**
-* Procedural (kodla üretilen) eskitme ahşap zemin ve tuğla/duvar kağıdı kaplama dokuları.
-* Gerçekçi el feneri sallantısı (yürürken ve koşarken dinamik hareket).
-* Yanıp sönen ve korku atmosferi katan cızırdayan tavan lambaları.
-* Yakalandığınızda ekranı kaplayan gerçekçi **Jumpscare / Korkutma efekti** ve çığlık sesi.
+    <!-- HUD -->
+    <div id="hud" class="absolute top-4 left-4 z-30 text-white text-sm font-bold space-y-3 pointer-events-none hidden">
+        <div id="objective" class="text-red-400 bg-black/80 p-3 rounded-lg border border-red-900/60 shadow-lg max-w-sm">
+            🎯 Hedef: Anahtarı bul ve ana çıkış kapısını aç!
+        </div>
+        <div id="inventory" class="text-yellow-300 bg-black/60 p-2 rounded border border-yellow-900/40 w-fit">
+            🔑 Envanter: Boş
+        </div>
+        
+        <div class="space-y-1 bg-black/60 p-2.5 rounded border border-gray-800 w-56">
+            <div class="flex justify-between text-xs text-gray-300">
+                <span>Ses Seviyesi</span>
+                <span id="noise-text">Sessiz</span>
+            </div>
+            <div class="w-full bg-gray-900 rounded-full h-2 border border-gray-700 overflow-hidden">
+                <div id="noise-bar" class="bg-red-600 h-full w-0 transition-all duration-75"></div>
+            </div>
 
+            <div class="flex justify-between text-xs text-gray-300 pt-1">
+                <span>Dayanıklılık (Stamina)</span>
+            </div>
+            <div class="w-full bg-gray-900 rounded-full h-2 border border-gray-700 overflow-hidden">
+                <div id="stamina-bar" class="bg-blue-500 h-full w-full transition-all duration-75"></div>
+            </div>
+        </div>
 
-2. **Gelişmiş Büyükanne (Granny) Modeli ve Yapay Zeka:**
-* Detaylandırılmış 3D model (kambur yürüyüş, sallanan kollar/bacaklar, elde sopası ve parlayan kırmızı gözler).
-* **4 Aşamalı Yapay Zeka:** *Devriye (Patrol)*, *Ses Dinleme / Araştırma (Investigate)*, *Kovalama (Chase)* ve *Saldırı (Jumpscare)*.
-* Yaklaştıkça hızlanan ve yükselen **Kalp Atışı** ve korku ses efektleri.
+        <div id="status-tag" class="text-xs px-2 py-1 bg-gray-900/80 rounded border border-gray-700 text-gray-400 w-fit">
+            Durum: Ayakta
+        </div>
+    </div>
 
+    <!-- JUMPSCARE LAYER -->
+    <div id="jumpscare-overlay">
+        <div class="jumpscare-face">
+            <div class="text-red-600 text-9xl font-black tracking-widest uppercase animate-ping mb-4">Seni Yakaladım!</div>
+            <div class="text-white text-2xl font-mono border-b-2 border-red-600 pb-2">BÜYÜKANNE SENİ BIRAKMADI...</div>
+        </div>
+    </div>
 
-3. **Mekanikler & Kontroller:**
-* **Eğilme (C/Ctrl):** Eğilerek yürüdüğünüzde ses seviyeniz sıfıra yakın olur ve Granny sizi daha zor fark eder.
-* **Dolaplara Saklanma:** Odalardaki dolaplara (Wardrobe) yaklaşarak `E` tuşuna basıp saklanabilirsiniz. Granny sizi saklanırken görmediyse pas geçer.
-* **Gelişmiş HUD & Etkileşim:** Odaklandığınız eşyaya/kapıya göre ekranda dinamik etkileşim ipucu çıkar (`[E] Anahtarı Al`, `[E] Saklan` vb.). Stamina (Enerji) barı ve Ses Göstergesi eklendi.
-* **Web Audio API Ses Efektleri:** Adım sesleri, dolap açılma/kapanma, kilitli kapı zorlama, el feneri tuş sesi ve büyükanne çığlığı.
+    <!-- GAME OVER / WIN SCREENS -->
+    <div id="game-over" class="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center text-center hidden">
+        <h1 class="text-7xl font-extrabold text-red-600 tracking-widest mb-2 animate-pulse drop-shadow-[0_0_25px_rgba(255,0,0,0.8)]">ÖLDÜN!</h1>
+        <p class="text-gray-400 text-lg mb-8 max-w-md">Evden kaçmayı başaramadın. Büyükanne seni karanlığa gömdü...</p>
+        <button onclick="location.reload()" class="px-8 py-4 bg-red-900 hover:bg-red-800 text-white font-bold text-lg rounded-lg shadow-2xl transition transform hover:scale-105 border border-red-500">TEKRAR DENE</button>
+    </div>
 
-
-
-Geliştirilmiş oyun dosyasını hazırladım:
+    <div id="win-screen" class="absolute inset-0 bg-zinc-950/95 z-50 flex flex-col items-center justify-center text-center hidden">
+        <h1 class="text-6xl font-extrabold text-emerald-500 tracking-widest mb-4 drop-shadow-[0_0_20px_rgba(16,185,129,0.5)]">ÖZGÜRSÜN!</h1>
+        <p class="text-gray-300 text-xl mb-8">Korkunç evden canlı
