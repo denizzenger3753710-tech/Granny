@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>3D Horror House - Granny Mobile & PC</title>
+    <title>3D Horror House - Granny 5 Days & 2 Floors</title>
     <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Tailwind CSS -->
@@ -37,8 +37,9 @@
         .touch-btn {
             pointer-events: auto; background: rgba(0, 0, 0, 0.6); border: 2px solid rgba(255, 255, 255, 0.3);
             color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-weight: bold; font-size: 18px; user-select: none; active: scale(0.95);
+            font-weight: bold; font-size: 18px; user-select: none;
         }
+        .touch-btn:active { transform: scale(0.92); }
         #joystick-zone {
             position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px;
             background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3);
@@ -47,6 +48,12 @@
         #joystick-knob {
             position: absolute; top: 35px; left: 35px; width: 50px; height: 50px;
             background: rgba(239, 68, 68, 0.8); border-radius: 50%; pointer-events: none;
+        }
+
+        /* GÜN GEÇİŞ EKRANI */
+        #day-screen {
+            position: fixed; inset: 0; background: #000; z-index: 90; display: none;
+            align-items: center; justify-content: center; flex-direction: column; color: #dc2626;
         }
 
         #jumpscare-overlay {
@@ -65,6 +72,12 @@
     <div class="vignette"></div>
     <div id="blood" class="blood-overlay"></div>
     <div id="crosshair"></div>
+
+    <!-- DAY TRANSITION SCREEN -->
+    <div id="day-screen">
+        <h1 id="day-title" class="text-6xl font-black tracking-widest animate-pulse mb-2">1. GÜN</h1>
+        <p class="text-gray-400 text-sm">Büyükanne seni uyutmadı...</p>
+    </div>
 
     <!-- MOBİL UI LAYER -->
     <div id="mobile-controls">
@@ -85,8 +98,11 @@
 
     <!-- HUD -->
     <div id="hud" class="absolute top-4 left-4 z-30 text-white text-sm font-bold space-y-2 pointer-events-none hidden">
+        <div id="day-hud" class="text-yellow-400 bg-red-950/80 p-2 rounded border border-red-800/80 w-fit">
+            📅 GÜN: 1 / 5
+        </div>
         <div id="objective" class="text-red-400 bg-black/80 p-2.5 rounded-lg border border-red-900/60 shadow-lg max-w-xs">
-            🎯 Hedef: Anahtarı bul ve çıkış kapısını aç!
+            🎯 Hedef: Çekmeceleri ara, anahtarı bul ve kaç!
         </div>
         <div id="inventory" class="text-yellow-300 bg-black/60 p-2 rounded border border-yellow-900/40 w-fit">
             🔑 Envanter: Boş
@@ -117,21 +133,21 @@
     <!-- JUMPSCARE LAYER -->
     <div id="jumpscare-overlay">
         <div class="jumpscare-anim text-center">
-            <h1 class="text-red-600 text-7xl font-black tracking-widest uppercase mb-2 drop-shadow-[0_0_30px_rgba(255,0,0,1)]">YAKALANDIN!</h1>
-            <p class="text-gray-300 text-xl font-mono">BÜYÜKANNE SENİ BIRAKMADI...</p>
+            <h1 class="text-red-600 text-7xl font-black tracking-widest uppercase mb-2 drop-shadow-[0_0_30px_rgba(255,0,0,1)]">Seni Yakaladı!</h1>
+            <p class="text-gray-300 text-xl font-mono">BİR SONRAKİ GÜN BAŞLIYOR...</p>
         </div>
     </div>
 
     <!-- GAME OVER / WIN SCREENS -->
     <div id="game-over" class="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center text-center hidden">
-        <h1 class="text-6xl font-black text-red-600 tracking-widest mb-2 animate-pulse">ÖLDÜN!</h1>
-        <p class="text-gray-400 text-base mb-6 max-w-md">Büyükanne seni yakaladı...</p>
+        <h1 class="text-6xl font-black text-red-600 tracking-widest mb-2 animate-pulse">5 GÜN BİTTİ!</h1>
+        <p class="text-gray-400 text-base mb-6 max-w-md">Büyükanne seni tamamen alt etti...</p>
         <button onclick="location.reload()" class="px-8 py-3 bg-red-900 hover:bg-red-800 text-white font-bold text-lg rounded-lg shadow-2xl border border-red-500">TEKRAR DENE</button>
     </div>
 
     <div id="win-screen" class="absolute inset-0 bg-zinc-950/95 z-50 flex flex-col items-center justify-center text-center hidden">
         <h1 class="text-6xl font-extrabold text-emerald-500 tracking-widest mb-4">ÖZGÜRSÜN!</h1>
-        <p class="text-gray-300 text-lg mb-6">Korkunç evden başarmayla kaçtın!</p>
+        <p class="text-gray-300 text-lg mb-6">2 Katlı evden kaçmayı başardın!</p>
         <button onclick="location.reload()" class="px-8 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-lg rounded-lg shadow-2xl border border-emerald-400">YENİDEN OYNA</button>
     </div>
 
@@ -139,13 +155,13 @@
     <div id="start-screen" class="absolute inset-0 bg-neutral-950 z-50 flex flex-col items-center justify-center text-center p-6 border-8 border-red-950">
         <div class="max-w-md bg-black/90 p-6 rounded-xl border border-red-900/60 shadow-2xl">
             <h1 class="text-4xl font-black text-red-700 tracking-wider mb-2">BÜYÜKANNE'NİN EVİ</h1>
-            <p class="text-gray-400 text-xs tracking-widest uppercase mb-4 border-b border-red-900/40 pb-2">3D Mobil & PC Korku Oyunu</p>
+            <p class="text-gray-400 text-xs tracking-widest uppercase mb-4 border-b border-red-900/40 pb-2">2 Katlı & 5 Günlük Kaçış Oyunu</p>
             
             <div class="text-gray-300 text-xs space-y-2 mb-6 text-left bg-zinc-900/80 p-3 rounded border border-zinc-800">
-                <p>🧟‍♂️ <strong>Kural:</strong> Büyükanne sese duyarlıdır. Koşarsan yanına gelir!</p>
-                <p>🔑 <strong>Görev:</strong> Paslı anahtarı bul, kapıyı aç ve kaç!</p>
-                <p>📱 <strong>Mobil:</strong> Dokunmatik joystick ve ekrandaki butonları kullanın.</p>
-                <p>💻 <strong>PC:</strong> WASD + Fare + SHIFT + C + F + E</p>
+                <p>🧱 <strong>Duvar Çarpışması:</strong> Artık duvarların ve eşyaların içinden geçilemez!</p>
+                <p>🏛️ <strong>Üst Kat & Merdivenler:</strong> İki katlı evi keşfet, merdivenleri kullan.</p>
+                <p>🗄️ <strong>Çekmeceler:</strong> Çekmeceleri açarak gizli anahtarı ara.</p>
+                <p>📅 <strong>5 Hak (Gece):</strong> Yakalandığında yeni günde uyanırsın.</p>
             </div>
 
             <button id="start-btn" class="w-full py-4 bg-red-900 hover:bg-red-800 text-white font-extrabold text-lg rounded-lg shadow-2xl border border-red-600">
@@ -164,21 +180,25 @@
         
         let flashlight, flashlightOn = true, hasKey = false;
         let grannyMesh, grannyState = 'patrol';
+        let currentDay = 1;
+        const maxDays = 5;
+
         let grannyPathIndex = 0;
         let grannyWaypoints = [
             new THREE.Vector3(0, 0, -15),
             new THREE.Vector3(-15, 0, -15),
-            new THREE.Vector3(-15, 0, 15),
-            new THREE.Vector3(15, 0, 15),
+            new THREE.Vector3(-15, 4.5, 15), // Üst kat waypoint
+            new THREE.Vector3(15, 4.5, 15),
             new THREE.Vector3(15, 0, -15)
         ];
 
-        let keyObject, doorObject;
+        let doorObject;
         let interactiveObjects = [];
+        let wallColliders = []; // Duvar Çarpışma Kutuları
         let isHiddenInCabinet = false;
         let currentCabinet = null;
 
-        let gameStarted = false, isGameOver = false, isGameWon = false;
+        let gameStarted = false, isGameOver = false, isGameWon = false, isTransitioningDay = false;
         let noiseLevel = 0;
         let raycaster, mouseCenter;
         let hoveredObject = null;
@@ -186,7 +206,7 @@
         let grannyLeftArm, grannyRightArm;
         let isMobile = false;
 
-        // Joystick Verileri
+        // Joystick
         let joyActive = false;
         let joyMove = { x: 0, y: 0 };
 
@@ -210,6 +230,13 @@
                 gain.gain.setValueAtTime(0.08, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
                 osc.connect(gain); gain.connect(audioCtx.destination);
                 osc.start(now); osc.stop(now + 0.08);
+            }
+            else if (type === 'drawer') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, now);
+                gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.15);
             }
             else if (type === 'key') {
                 let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
@@ -252,8 +279,8 @@
 
         function init() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a0f);
-            scene.fog = new THREE.FogExp2(0x0a0a0f, 0.04); // Sis azaltıldı (Daha net görünüm)
+            scene.background = new THREE.Color(0x08080c);
+            scene.fog = new THREE.FogExp2(0x08080c, 0.035);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 1.6, 20);
@@ -269,8 +296,7 @@
             raycaster = new THREE.Raycaster();
             mouseCenter = new THREE.Vector2(0, 0);
 
-            // Parlaklık Artırıldı
-            const ambientLight = new THREE.AmbientLight(0x404050, 0.85);
+            const ambientLight = new THREE.AmbientLight(0x454555, 0.85);
             scene.add(ambientLight);
 
             flashlight = new THREE.SpotLight(0xfffaed, 3.5, 35, Math.PI / 5, 0.5, 1.2);
@@ -281,12 +307,10 @@
             camera.add(flashlight.target);
             scene.add(camera);
 
-            buildHouse();
-            spawnCabinets();
-            spawnItems();
+            buildTwoStoryHouse();
+            spawnCabinetsAndDrawers();
             spawnGranny();
 
-            // Kontrol Etkinlikleri
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
             document.addEventListener('mousemove', onMouseMove);
@@ -295,44 +319,64 @@
             setupMobileControls();
         }
 
-        function buildHouse() {
+        // 2 Katlı Ev & Merdiven Mimarisi
+        function buildTwoStoryHouse() {
             const floorMat = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.6 });
             const wallMat = new THREE.MeshStandardMaterial({ color: 0x5c5247, roughness: 0.7 });
             const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x1f1f1f });
 
-            // Zemin & Tavan
-            const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
-            floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+            // Alt Zemin & Üst Zemin
+            const floor1 = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
+            floor1.rotation.x = -Math.PI / 2; floor1.receiveShadow = true; scene.add(floor1);
 
+            // Üst Kat Zemin (Ortası merdiven için açık)
+            const floor2 = new THREE.Mesh(new THREE.BoxGeometry(50, 0.3, 35), floorMat);
+            floor2.position.set(0, 4.5, -7.5);
+            floor2.receiveShadow = true; scene.add(floor2);
+            wallColliders.push(new THREE.Box3().setFromObject(floor2));
+
+            // Tavan
             const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), ceilingMat);
-            ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 4; scene.add(ceiling);
+            ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 9; scene.add(ceiling);
 
-            // Dış Duvarlar
-            createWall(0, 2, -25, 50, 4, 1, wallMat);
-            createWall(0, 2, 25, 50, 4, 1, wallMat);
-            createWall(-25, 2, 0, 1, 4, 50, wallMat);
-            createWall(25, 2, 0, 1, 4, 50, wallMat);
+            // Alt Kat Duvarları
+            createWall(0, 2.25, -25, 50, 4.5, 1, wallMat);
+            createWall(0, 2.25, 25, 50, 4.5, 1, wallMat);
+            createWall(-25, 2.25, 0, 1, 4.5, 50, wallMat);
+            createWall(25, 2.25, 0, 1, 4.5, 50, wallMat);
+            createWall(-10, 2.25, 0, 1, 4.5, 30, wallMat);
 
-            // Belirgin İç Oda Duvarları
-            createWall(-10, 2, 0, 1, 4, 30, wallMat);
-            createWall(10, 2, -5, 1, 4, 20, wallMat);
-            createWall(0, 2, -10, 20, 4, 1, wallMat);
+            // Üst Kat Duvarları
+            createWall(0, 6.75, -25, 50, 4.5, 1, wallMat);
+            createWall(0, 6.75, 25, 50, 4.5, 1, wallMat);
+            createWall(-25, 6.75, 0, 1, 4.5, 50, wallMat);
+            createWall(25, 6.75, 0, 1, 4.5, 50, wallMat);
+            createWall(10, 6.75, -5, 1, 4.5, 25, wallMat);
+
+            // Merdiven Basamakları
+            for (let i = 0; i < 15; i++) {
+                const step = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 0.8), floorMat);
+                step.position.set(12, i * 0.3, 10 + i * 0.6);
+                step.receiveShadow = true; step.castShadow = true;
+                scene.add(step);
+                wallColliders.push(new THREE.Box3().setFromObject(step));
+            }
 
             // Çıkış Kapısı
-            const doorGeo = new THREE.BoxGeometry(3, 3.5, 0.4);
+            const doorGeo = new THREE.BoxGeometry(3, 3.8, 0.4);
             const doorMat = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.4 });
             doorObject = new THREE.Mesh(doorGeo, doorMat);
-            doorObject.position.set(0, 1.75, 24.7);
+            doorObject.position.set(0, 1.9, 24.7);
             doorObject.castShadow = true;
-            doorObject.userData = { type: 'door', name: 'Çıkış Kapısı' };
+            doorObject.userData = { type: 'door', name: 'Ana Çıkış Kapısı' };
             scene.add(doorObject);
             interactiveObjects.push(doorObject);
 
-            // Odalara Sabit Tavan Işıkları (Net Alanlar İçin)
+            // Tavan Işıkları
             addRoomLight(-15, 3.8, -15);
             addRoomLight(15, 3.8, 15);
-            addRoomLight(0, 3.8, 0);
-            addRoomLight(-15, 3.8, 15);
+            addRoomLight(-15, 8.3, -15);
+            addRoomLight(15, 8.3, 15);
         }
 
         function createWall(x, y, z, w, h, d, mat) {
@@ -340,48 +384,60 @@
             wall.position.set(x, y, z);
             wall.castShadow = true; wall.receiveShadow = true;
             scene.add(wall);
+
+            // Duvar Çarpışma Kutusu
+            const bbox = new THREE.Box3().setFromObject(wall);
+            wallColliders.push(bbox);
         }
 
         function addRoomLight(x, y, z) {
             const pLight = new THREE.PointLight(0xffddaa, 1.2, 18);
             pLight.position.set(x, y, z);
             scene.add(pLight);
-
             const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffddaa }));
-            bulb.position.set(x, y, z);
-            scene.add(bulb);
+            bulb.position.set(x, y, z); scene.add(bulb);
         }
 
-        function spawnCabinets() {
-            const cabinetMat = new THREE.MeshStandardMaterial({ color: 0x2b1a0e, roughness: 0.6 });
-            const cabinetPositions = [
-                { x: -22, z: -22, rot: 0 },
-                { x: 22, z: -22, rot: Math.PI / 2 },
-                { x: -22, z: 22, rot: -Math.PI / 2 }
+        // Dolaplar ve Çekmeceler
+        function spawnCabinetsAndDrawers() {
+            const mat = new THREE.MeshStandardMaterial({ color: 0x2b1a0e, roughness: 0.6 });
+
+            // Saklanma Dolapları
+            const cabPositions = [
+                { x: -22, y: 0, z: -22, rot: 0 },
+                { x: -22, y: 4.5, z: -22, rot: 0 },
+                { x: 22, y: 4.5, z: -22, rot: Math.PI / 2 }
             ];
 
-            cabinetPositions.forEach(pos => {
+            cabPositions.forEach(pos => {
                 const cabGroup = new THREE.Group();
-                const body = new THREE.Mesh(new THREE.BoxGeometry(2, 3.6, 1.2), cabinetMat);
+                const body = new THREE.Mesh(new THREE.BoxGeometry(2, 3.6, 1.2), mat);
                 body.position.y = 1.8; body.castShadow = true;
                 cabGroup.add(body);
 
-                cabGroup.position.set(pos.x, 0, pos.z); cabGroup.rotation.y = pos.rot;
+                cabGroup.position.set(pos.x, pos.y, pos.z); cabGroup.rotation.y = pos.rot;
                 body.userData = { type: 'cabinet', parentGroup: cabGroup, name: 'Dolap (Saklan)' };
                 scene.add(cabGroup);
                 interactiveObjects.push(body);
+                wallColliders.push(new THREE.Box3().setFromObject(body));
             });
-        }
 
-        function spawnItems() {
-            const keyGeo = new THREE.BoxGeometry(0.6, 0.2, 0.2);
-            const keyMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.9, roughness: 0.1 });
-            keyObject = new THREE.Mesh(keyGeo, keyMat);
-            keyObject.position.set(-20, 0.2, -20);
-            keyObject.castShadow = true;
-            keyObject.userData = { type: 'key', name: 'Çıkış Anahtarı' };
-            scene.add(keyObject);
-            interactiveObjects.push(keyObject);
+            // Çekmeceli Masa / Komodinler
+            const drawerPositions = [
+                { x: 18, y: 0, z: -20, hasKey: true },
+                { x: -18, y: 4.5, z: 18, hasKey: false },
+                { x: 5, y: 4.5, z: -20, hasKey: false }
+            ];
+
+            drawerPositions.forEach((pos, idx) => {
+                const table = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 1.0), mat);
+                table.position.set(pos.x, pos.y + 0.6, pos.z);
+                table.castShadow = true;
+                table.userData = { type: 'drawer', isOpen: false, hasKey: pos.hasKey, name: 'Çekmeceyi Aç' };
+                scene.add(table);
+                interactiveObjects.push(table);
+                wallColliders.push(new THREE.Box3().setFromObject(table));
+            });
         }
 
         function spawnGranny() {
@@ -412,18 +468,17 @@
             scene.add(grannyMesh);
         }
 
-        // --- KONTROLLER (DÜZELTİLMİŞ NORMALE ÇEKİLDİ) ---
+        // Kontroller
         let euler = new THREE.Euler(0, 0, 0, 'YXZ');
         const PI_2 = Math.PI / 2;
 
         function onMouseMove(event) {
-            if (!gameStarted || isGameOver || isGameWon || document.pointerLockElement !== document.body) return;
+            if (!gameStarted || isGameOver || isGameWon || isTransitioningDay || document.pointerLockElement !== document.body) return;
 
             const movementX = event.movementX || 0;
             const movementY = event.movementY || 0;
 
             euler.setFromQuaternion(camera.quaternion);
-            // Fare tersliği düzeltildi
             euler.y -= movementX * 0.002;
             euler.x -= movementY * 0.002;
             euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x));
@@ -431,7 +486,7 @@
         }
 
         function onKeyDown(event) {
-            if (!gameStarted) return;
+            if (!gameStarted || isTransitioningDay) return;
             switch (event.code) {
                 case 'KeyW': moveForward = true; break;
                 case 'KeyS': moveBackward = true; break;
@@ -461,7 +516,6 @@
             }
         }
 
-        // --- MOBİL DOKUNMATİK ENTEGRASYON ---
         function setupMobileControls() {
             const joyZone = document.getElementById('joystick-zone');
             const joyKnob = document.getElementById('joystick-knob');
@@ -498,7 +552,6 @@
             };
             window.addEventListener('touchend', resetJoy);
 
-            // Sağ Ekran Dokunma ile Kamera Çevirme
             let lastTouchX = 0, lastTouchY = 0;
             window.addEventListener('touchstart', (e) => {
                 if (e.touches[0].clientX > window.innerWidth / 2) {
@@ -523,7 +576,6 @@
                 }
             });
 
-            // Mobil Butonlar
             document.getElementById('btn-run').addEventListener('touchstart', () => { isRunning = !isRunning; });
             document.getElementById('btn-crouch').addEventListener('touchstart', () => {
                 isCrouching = !isCrouching;
@@ -553,21 +605,28 @@
             if (!hoveredObject) return;
             const type = hoveredObject.userData.type;
 
-            if (type === 'key') {
-                hasKey = true;
-                scene.remove(keyObject);
-                interactiveObjects = interactiveObjects.filter(o => o !== keyObject);
-                document.getElementById('inventory').innerText = '🔑 Envanter: Çıkış Anahtarı';
-                document.getElementById('objective').innerText = '🎯 Hedef: Çıkış kapısını aç!';
-                playSound('key');
-            } 
+            if (type === 'drawer') {
+                if (!hoveredObject.userData.isOpen) {
+                    hoveredObject.userData.isOpen = true;
+                    playSound('drawer');
+                    if (hoveredObject.userData.hasKey && !hasKey) {
+                        hasKey = true;
+                        document.getElementById('inventory').innerText = '🔑 Envanter: Çıkış Anahtarı';
+                        document.getElementById('objective').innerText = '🎯 Hedef: Ana kapıyı aç!';
+                        playSound('key');
+                        hoveredObject.userData.name = 'Çekmece (Boş)';
+                    } else {
+                        hoveredObject.userData.name = 'Çekmece (Boş)';
+                    }
+                }
+            }
             else if (type === 'door') {
                 if (hasKey) {
                     isGameWon = true;
                     document.getElementById('win-screen').style.display = 'flex';
                     if (!isMobile) document.exitPointerLock();
                 } else {
-                    document.getElementById('objective').innerText = '🔒 Kapı Kilitli! Anahtarı bulmalısın.';
+                    document.getElementById('objective').innerText = '🔒 Kilitli! Çekmecelerden anahtarı bul.';
                 }
             } 
             else if (type === 'cabinet') {
@@ -578,25 +637,48 @@
             }
         }
 
-        // --- ANA OYUN DÖNGÜSÜ ---
+        // Duvar Çarpışma Tespiti (Collision)
+        function checkWallCollision(targetPos, radius = 0.6) {
+            const playerSphere = new THREE.Sphere(targetPos, radius);
+            for (let bbox of wallColliders) {
+                if (bbox.intersectsSphere(playerSphere)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // MERDİVEN VE YÜKSEKLİK HESABI
+        function getTerrainHeight(x, z) {
+            // Merdiven Alanı
+            if (x > 9 && x < 15 && z > 9 && z < 19) {
+                let progress = (z - 9) / 10;
+                return Math.max(0, Math.min(4.5, progress * 4.5));
+            }
+            // Üst Kat
+            if (z < 10 && (x < -10 || x > 10 || z < -5)) {
+                return 4.5;
+            }
+            return 0; // Alt Kat
+        }
+
+        // ANA OYUN DÖNGÜSÜ
         function animate() {
             requestAnimationFrame(animate);
 
             const delta = clock.getDelta();
             const time = clock.getElapsedTime();
 
-            if (gameStarted && !isGameOver && !isGameWon) {
+            if (gameStarted && !isGameOver && !isGameWon && !isTransitioningDay) {
                 
                 if (!isHiddenInCabinet) {
                     velocity.x -= velocity.x * 10.0 * delta;
                     velocity.z -= velocity.z * 10.0 * delta;
 
-                    // Yön Hareket Düzeltmesi (İleri = W / Joystick Yukarı)
                     let inputZ = (Number(moveBackward) - Number(moveForward)) || joyMove.y;
                     let inputX = (Number(moveRight) - Number(moveLeft)) || joyMove.x;
 
-                    direction.z = inputZ;
-                    direction.x = inputX;
+                    direction.z = inputZ; direction.x = inputX;
                     if (direction.length() > 0) direction.normalize();
 
                     if (isRunning && (inputZ !== 0 || inputX !== 0) && !isCrouching) {
@@ -607,20 +689,35 @@
                     }
                     document.getElementById('stamina-bar').style.width = stamina + '%';
 
-                    let targetSpeed = 4.0;
-                    let targetHeight = 1.6;
+                    let targetSpeed = 3.8;
+                    let eyeOffset = isCrouching ? 0.9 : 1.6;
 
-                    if (isCrouching) { targetSpeed = 1.8; targetHeight = 0.9; } 
-                    else if (isRunning && stamina > 0) { targetSpeed = 7.5; }
-
-                    camera.position.y += (targetHeight - camera.position.y) * 10 * delta;
+                    if (isRunning && stamina > 0) targetSpeed = 6.5; // Koşma hızı dengelendi
 
                     if (inputZ !== 0) velocity.z += direction.z * targetSpeed * 10.0 * delta;
                     if (inputX !== 0) velocity.x += direction.x * targetSpeed * 10.0 * delta;
 
-                    camera.translateX(velocity.x * delta);
-                    camera.translateZ(velocity.z * delta);
+                    // Yeni Pozisyon Deneme ve Çarpışma Kontrolü
+                    let moveX = velocity.x * delta;
+                    let moveZ = velocity.z * delta;
 
+                    let nextPos = camera.position.clone();
+                    nextPos.x += moveX;
+                    if (!checkWallCollision(nextPos)) {
+                        camera.translateX(moveX);
+                    }
+
+                    nextPos = camera.position.clone();
+                    nextPos.z += moveZ;
+                    if (!checkWallCollision(nextPos)) {
+                        camera.translateZ(moveZ);
+                    }
+
+                    // Yükseklik Yönlendirmesi (Kat & Merdiven)
+                    let baseHeight = getTerrainHeight(camera.position.x, camera.position.z);
+                    camera.position.y += (baseHeight + eyeOffset - camera.position.y) * 8 * delta;
+
+                    // Dünya Sınırları
                     camera.position.x = Math.max(-24, Math.min(24, camera.position.x));
                     camera.position.z = Math.max(-24, Math.min(24, camera.position.z));
 
@@ -629,7 +726,7 @@
                         if (Math.sin(time * 10) > 0.98) playSound('step');
                         if (isCrouching) noiseLevel = 10;
                         else if (isRunning) noiseLevel = 100;
-                        else noiseLevel = 40;
+                        else noiseLevel = 35;
                     } else {
                         noiseLevel = 0;
                     }
@@ -658,7 +755,7 @@
                     crosshair.classList.remove('active');
                 }
 
-                // Yapay Zeka Mantığı
+                // Yapay Zeka Mantığı (Düşürülmüş Hız)
                 const distToGranny = grannyMesh.position.distanceTo(camera.position);
 
                 if (noiseLevel > 50 && !isHiddenInCabinet) {
@@ -667,16 +764,24 @@
                     grannyState = 'patrol';
                 }
 
-                let moveSpeed = 2.0;
+                let moveSpeed = 1.8; // Büyükanne devriye hızı
                 if (grannyState === 'chase') {
-                    moveSpeed = 4.2;
+                    moveSpeed = 3.2; // Kovalamaca hızı dengelendi (daha önce 4.2 idi)
                     grannyMesh.lookAt(camera.position.x, grannyMesh.position.y, camera.position.z);
                     grannyMesh.translateZ(moveSpeed * delta);
+
+                    // Büyükanne Yükseklik Takibi (Merdiven & Katlar)
+                    let gHeight = getTerrainHeight(grannyMesh.position.x, grannyMesh.position.z);
+                    grannyMesh.position.y += (gHeight - grannyMesh.position.y) * 5 * delta;
+
                     document.getElementById('blood').style.boxShadow = `inset 0 0 ${Math.max(20, (15 - distToGranny) * 18)}px rgba(180, 0, 0, 0.6)`;
                 } else {
                     let targetWaypoint = grannyWaypoints[grannyPathIndex];
                     grannyMesh.lookAt(targetWaypoint.x, grannyMesh.position.y, targetWaypoint.z);
                     grannyMesh.translateZ(moveSpeed * delta);
+
+                    let gHeight = getTerrainHeight(grannyMesh.position.x, grannyMesh.position.z);
+                    grannyMesh.position.y += (gHeight - grannyMesh.position.y) * 5 * delta;
 
                     if (grannyMesh.position.distanceTo(targetWaypoint) < 1.5) {
                         grannyPathIndex = (grannyPathIndex + 1) % grannyWaypoints.length;
@@ -697,17 +802,39 @@
             renderer.render(scene, camera);
         }
 
+        // Yakalanma ve Gün Geçişi
         function triggerJumpscare() {
-            isGameOver = true;
+            isTransitioningDay = true;
             playSound('jumpscare');
-            if (!isMobile) document.exitPointerLock();
 
             const jumpscareEl = document.getElementById('jumpscare-overlay');
             jumpscareEl.style.display = 'flex';
 
             setTimeout(() => {
                 jumpscareEl.style.display = 'none';
-                document.getElementById('game-over').style.display = 'flex';
+
+                if (currentDay < maxDays) {
+                    currentDay++;
+                    document.getElementById('day-hud').innerText = `📅 GÜN: ${currentDay} / ${maxDays}`;
+                    document.getElementById('day-title').innerText = `${currentDay}. GÜN`;
+                    
+                    const dayScreen = document.getElementById('day-screen');
+                    dayScreen.style.display = 'flex';
+
+                    // Oyuncuyu ve Büyükanneyi Başlangıç Pozisyonuna Getir
+                    camera.position.set(0, 1.6, 20);
+                    grannyMesh.position.set(0, 0, -15);
+                    grannyState = 'patrol';
+
+                    setTimeout(() => {
+                        dayScreen.style.display = 'none';
+                        isTransitioningDay = false;
+                    }, 2000);
+                } else {
+                    isGameOver = true;
+                    if (!isMobile) document.exitPointerLock();
+                    document.getElementById('game-over').style.display = 'flex';
+                }
             }, 1200);
         }
     </script>
